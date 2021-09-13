@@ -55,16 +55,16 @@ const int WallFollowingSide = -90;     //Set: -90 for right wall following or +9
 //Servo parameters
 const int FrontServoAngle = 90;
 const int SideServoAngle = FrontServoAngle + WallFollowingSide; //(0 or 180 degrees)
-const int FrontServoDelay = 150;
-const int SideServoDelay = 150;
+const int FrontServoDelay = 90;
+const int SideServoDelay = 90;
 
-const int LeftSpeed =95;
-const int RightSpeed =1155;
+const int LeftSpeed =100; //да се подбере оптималната скорост на левия двигател
+const int RightSpeed =100; //да се подбере оптималната скорост на десния двигател
 
 float maxDistance = 130.0;
 int speedLeft = LeftSpeed;
 int speedRight = RightSpeed;
-
+int currentState = 0;
 
 //Servo myservo;
 
@@ -75,10 +75,10 @@ void turnRight();
 void stopMoving();
 float getDistance(int servoAngle, int delayAfterServoMovement); //read the Ultasonic Sensor pointing at the given servo angle
 
-int left();
-int mid();
-int right();
-int leftEdge();
+//int left();
+//int mid();
+//int right();
+//int leftEdge();
 int rightEdge();
 
 //-----------------------------------------------
@@ -110,50 +110,71 @@ void setup()
 
 void loop()
 {
-  int currentState = 0;
-
-
-  if ((leftEdge() == 1) && (left() == 1) && (mid() == 0) && (right() == 1) && (rightEdge() == 1)) //                1 1 0 1 1
+ //
+ int leftEdge = digitalRead(LN_SENS_PIN_RIGHTEDGE);
+ int left = digitalRead(LN_SENS_PIN_RIGHT);
+ int mid = digitalRead(LN_SENS_PIN_MIDDLE);
+ int right = digitalRead(LN_SENS_PIN_LEFT);
+ int rightEdge = digitalRead(LN_SENS_PIN_LEFTEDGE);
+ 
+  if ((leftEdge == 0) && (left == 0) && (mid == 1) && (right == 0) && (rightEdge == 0)) //                0 0 1 0 0
   {
     currentState = 1;
+    Serial.println("case1");
   }
-  else if ((leftEdge() == 1) && (left() == 0) && (mid() == 0) && (right() == 1) && (rightEdge() == 1)) //           1 0 0 1 1
+  else if ((leftEdge == 0) && (left == 1) && (mid == 1) && (right == 0) && (rightEdge == 0)) //           0 1 1 0 0
   {
     currentState = 2;
+     Serial.println("case2");
   }
-  else if ((leftEdge() == 1) && (left() == 0) && (mid() == 1) && (right() == 1) && (rightEdge() == 1)) //         1 0 1 1 1
+  else if ((leftEdge == 0) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 0)) //         0 1 0 0 0
   {
     currentState = 3;
+     Serial.println("case3");
   }
-  else if ((leftEdge() == 0) && (left() == 0) && (mid() == 1) && (right() == 1) && (rightEdge() == 1)) //       0 0 1 1 1
+  else if ((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 0)) //       1 1 0 0 0
   {
     currentState = 4;
+     Serial.println("case4");
   }
-  else if ((leftEdge() == 0) && (left() == 1) && (mid() == 1) && (right() == 1) && (rightEdge() == 1)) //     0 1 1 1 1
+  else if ((leftEdge == 1) && (left == 0) && (mid == 0) && (right == 0) && (rightEdge == 0)) //     1 0 0 0 0
   {
     currentState = 5;
-    
+     Serial.println("case5");    
   }
-  else if ((leftEdge() == 1) && (left() == 1) && (mid() == 0) && (right() == 0) && (rightEdge() == 1)) //           1 1 0 0 1
+  else if ((leftEdge == 0) && (left == 0) && (mid == 1) && (right == 1) && (rightEdge == 0)) //           0 0 1 1 0
   {
     currentState = 6;
+     Serial.println("case6");
   }
-  else if ((leftEdge() == 1) && (left() == 1) && (mid() == 1) && (right() == 0) && (rightEdge() == 1)) //         1 1 1 0 1
+  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 0)) //         0 0 0 1 0
   {
     currentState = 7;
+    Serial.println("case7");
   }
-  else if ((leftEdge() == 1) && (left() == 1) && (mid() == 1) && (right() == 0) && (rightEdge() == 0)) //       1 1 1 0 0
+  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 1)) //       0 0 0 1 1
   {
     currentState = 8;
+     Serial.println("case8");
   }
-  else if ((leftEdge() == 1) && (left() == 1) && (mid() == 1) && (right() == 1) && (rightEdge() == 0)) //     1 1 1 1 0
+  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 0) && (rightEdge == 1)) //     0 0 0 0 1
   {
-    currentState = 9;
+    currentState = 9;    
+    Serial.println("case9");
   }
-  else if ((leftEdge() == 0) && (left() == 0) && (mid() == 1) && (right() == 0) && (rightEdge() == 0)) // 0 0 1 0 0
+  else if (((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 1) && (rightEdge == 1))|| // 1 1 0 1 1
+          ((leftEdge == 1) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 1))|| // 1 0 0 1 1
+          ((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 1))|| // 1 1 0 0 1
+          ((leftEdge == 1) && (left == 1) && (mid == 1) && (right == 0) && (rightEdge == 1))|| // 1 1 1 0 1
+          ((leftEdge == 1) && (left == 0) && (mid == 1) && (right == 1) && (rightEdge == 1)))  // 1 0 1 1 1
  {
    currentState = 10;
  }
+ else
+ {
+   moveForward();
+ }
+
 
   switch (currentState)
   {
@@ -161,57 +182,60 @@ void loop()
     speedLeft = LeftSpeed;
     speedRight = RightSpeed;
     moveForward();
-    Serial.println("case1");
+    Serial.println("1");  
     break;
   case 2:
-    speedLeft = LeftSpeed * 0.4;
-    speedRight = RightSpeed * 1.0;
+    speedLeft = LeftSpeed * .6;
+    speedRight = 180;
     moveForward();
-    Serial.println("case2");
+    Serial.println("2");
     break;
   case 3:
-    speedLeft = LeftSpeed * 0.3;
-    speedRight = RightSpeed * 1.6;
+    speedLeft = LeftSpeed * .4;
+    speedRight = 200;
     moveForward();
-    Serial.println("case3");
+    Serial.println("3");
     break;
   case 4:
-    speedLeft = LeftSpeed * 0.2;
-    speedRight = RightSpeed * 2.0;
+    speedLeft = LeftSpeed * .3;
+    speedRight = 220;
+    Serial.println("4");
     moveForward();
+    break;
   case 5:
-    speedLeft = LeftSpeed * 0.1;
-    speedRight = RightSpeed * 2.6;
+    speedLeft = LeftSpeed * .2;
+    speedRight = 255;
     moveForward();
-    Serial.println("case5");
+    Serial.println("5");    
     break;
   case 6:
-    speedLeft = LeftSpeed * 1.0;
-    speedRight = RightSpeed * 0.4;
+    speedLeft = 180;
+    speedRight = RightSpeed * .6;
     moveForward();
-    Serial.println("case7");
+    Serial.println("6");
     break;
   case 7:
-    speedLeft = LeftSpeed * 1.6;
-    speedRight = RightSpeed * 0.3;
+    speedLeft = 200;
+    speedRight = RightSpeed * .4;    
     moveForward();
-    Serial.println("case8");
+    Serial.println("7");
     break;
   case 8:
-    speedLeft = LeftSpeed * 2.0;
-    speedRight = RightSpeed * 0.2;
+    speedLeft = 220;
+    speedRight = RightSpeed * .3;
     moveForward();
-    Serial.println("case9");
+    Serial.println("8");
     break;
   case 9:
-    speedLeft = LeftSpeed * 2.6;
-    speedRight = RightSpeed * 0.1;
+    speedLeft = 255;
+    speedRight = RightSpeed * .2;
     moveForward();
-    Serial.println("case10");
+     Serial.println("9");
     break;
   case 10:
-    stopMoving();
-    delay(1000);
+    stopMoving();  
+     delay(1000);
+    Serial.println("10");
     break;
   default:
     break;
@@ -258,38 +282,4 @@ void stopMoving() // Stop movement
   analogWrite(LEFT_BACK, HIGH);
   analogWrite(RIGHT_FOR, HIGH);
   analogWrite(RIGHT_BACK, HIGH);
-}
-int left()
-{
-  int distance;
-  distance = digitalRead(LN_SENS_PIN_RIGHT);
-  return distance;
-}
-
-int mid()
-{
-  int distance;
-  distance = digitalRead(LN_SENS_PIN_MIDDLE);
-  return distance;
-}
-
-int right()
-{
-  int distance;
-  distance = digitalRead(LN_SENS_PIN_LEFT);
-  return distance;
-}
-
-int leftEdge()
-{
-  int distance;
-  distance = digitalRead(LN_SENS_PIN_RIGHTEDGE);
-  return distance;
-}
-
-int rightEdge()
-{
-  int distance;
-  distance = digitalRead(LN_SENS_PIN_LEFTEDGE);
-  return distance;
 }
