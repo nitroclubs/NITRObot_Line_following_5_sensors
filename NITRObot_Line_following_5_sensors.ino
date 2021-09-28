@@ -1,85 +1,81 @@
-//Line_following_5_sensors
+/*
+      NITRO Clubs EU - Network of IcT Robo Clubs
+ 
+ WEB site: https://www.nitroclubs.eu 
+ GitHub repositories: https://github.com/nitroclubs?tab=repositories 
+ 
+      NITRObot Line following using 5 line detection sensors
+
+ NITRObot is equipped with different sensors and designed to let you simulate tasks from the industrial robotics world. 
+ 
+ In this program, we will use NITRObot's line detecting sensors to perform the line following task 
+ similarly to the way it is done in the big industrial robots.
+ 
+ Find the detailed instructions in NITRObot_Line_following_5_sensors-Instructions_EN.docx
+*/
+
+
+//====== INCLUDE ======
 #include <Arduino.h>
 
-// The rangefinders work well to show the distance to objects from around
-// 1 inch (2 cm) to around 9 feet away (3 meters), but they have trouble when
-// they aren't approximately at a right angle to the object they are detecting.
-// If the angle is too great (over about 15 degrees) not enough of the sound
-// bounces back for it to get a reliable range.
 
-//#include <Servo.h>
+//====== DEFINE ======
 
-#define LEFT_FOR 9    // PWMB
-#define LEFT_BACK 5   // DIRB  ---  Left
-#define RIGHT_FOR 6   // PWMA
-#define RIGHT_BACK 10 // DIRA  ---  Right
+// Comment the line bellow (put // in front of #define DEBUG statement) in order to Enable/Disable sending messages to the Serial port
+// using the macros below.
+#define DEBUG // When DEBUG is defined, it Enables the Debug mode, to Disable comment out this line
 
+#ifdef DEBUG
+// HERE WE DEFINE MACROS WHICH WILL ALLOW US TO DISABLE PRINTING TO THE SERIAL PORT
+// WHEN THE ROBOT WILL NOT BE CONNECTED TO A PC FOR DEBUGGING (IF "DEBUG" IS NOT DEFINED ABOVE).  
+// You will find detailed explanation in NITRObot_Line_following_5_sensors-Instructions_EN.odt
+#define Debugprintln(a) (Serial.println(a))
+#define Debugprint(a) (Serial.print(a))
+#define Debugwrite(a) (Serial.write(a))
+//Then instead of
+//Serial.println("Hello world!");
+//write
+//Debugprintln("Hello world!");
+//etc.
+#else
+// To deactivate the Serial printing, define the macro empty :
+#define Debugprintln(a)
+#define Debugprint(a)
+#define Debugwrite(a)
+
+#endif // end of #ifdef DEBUG
+
+
+#define MOTOR_LEFT_FWD_PIN 9
+#define MOTOR_LEFT_BKWD_PIN 5
+#define MOTOR_RIGHT_FWD_PIN 6
+#define MOTOR_RIGHT_BKWD_PIN 10
+
+// Define Cytron Maker Line sensor connection pins
+//   Arduino MEGA pin:                Sensor pin:
 #define LN_SENS_PIN_RIGHTEDGE 22 // right edge sensor - Connected to D1 pin of the sensor
-// #define LN_SENS_PIN_RIGHT 23       // right sensor - Connected to D2 pin of the sensor
-#define LN_SENS_PIN_RIGHT 25  // right sensor - Connected to D2 pin of the sensor
-#define LN_SENS_PIN_MIDDLE 24 // middle sensor - Connected to D3 pin of the sensor
-// #define LN_SENS_PIN_LEFT 25       // left sensor Connected to D4 pin of the sensor
-#define LN_SENS_PIN_LEFT 23     // left sensor Connected to D4 pin of the sensor
-#define LN_SENS_PIN_LEFTEDGE 26 // left edge sensor - Connected to D5 pin of the sensor
-#define LN_SENS_CALIB_PIN 27    // Connected to CAL pin of the sensor
-#define LN_SENS_ANALOG_PIN A15  // Connected to AN pin of the sensor
+#define LN_SENS_PIN_RIGHT 25     // right sensor - Connected to D2 pin of the sensor
+#define LN_SENS_PIN_MIDDLE 24    // middle sensor - Connected to D3 pin of the sensor
+#define LN_SENS_PIN_LEFT 23      // left sensor Connected to D4 pin of the sensor
+#define LN_SENS_PIN_LEFTEDGE 26  // left edge sensor - Connected to D5 pin of the sensor
+#define LN_SENS_CALIB_PIN 27     // Connected to CAL pin of the sensor
+#define LN_SENS_ANALOG_PIN A15   // Connected to AN pin of the sensor
 
-const int LeftIrAvoidancePin = 12;
-const int RightIrAvoidancePin = A5;
-const int UltrasonicPin = 3;
-const int RgbPin = 2;
-const int ServoPin = 13;
-const int LedPin = 33;
+//====== CONSTANTS ======
+const int DefaultLeftSpeed =100;   // !Replace the value with the one obtained from calibration! (using NITRObot_motor_calibration.ino)
+const int DefaultRightSpeed =100;  // !Replace the value with the one obtained from calibration! (using NITRObot_motor_calibration.ino)
+//====== VARIABLES ======
+int currentLeftSpeed = DefaultLeftSpeed;    // Variable to hold the left speed changes
+int currentRightSpeed = DefaultRightSpeed;  // Variable to hold the right speed changes
 
-// Robot parameters:
-// Robot length measured on the robot is 25.0 cm.
-// Robot width measured on the robot is  16.7 cm.
+int robotPosition = 0; // Variable to hold the position of the robot relative to the line
 
-// Maze parameters:
-// In order for the robot to be able to safely make an U turn,
-// we will choose the maze width to be 3 times the robot width,
-// which is equal to 50.1, we will approximate this value to 50 cm.
-const int MazeCorridorWidth = 50;
-
-// Tresholds:
-const float FrontDistanceTreshold = MazeCorridorWidth / 2;
-const float WallToCorridorMiddle = MazeCorridorWidth / 2;
-const float SideCorridorTreshold = MazeCorridorWidth;
-
-const float CenterLineTolerance = 2.5; // plus/minus how many cm are acceptable to consider the movement to be on the center line...
-                                       // +- 1 cm from centerline is considered straight movement!!!
-const float SharpTurnTreshold = 15.0;  // Measured by experiments with the robot
-const int WallFollowingSide = -90;     //Set: -90 for right wall following or +90 for left wall following
-                                       //we will add this value to the servo position i.e. myservo.write(90 + WallFollowingSide);
-                                       // in order to set to which side the servo should move (0 or 180 degrees)
-//Servo parameters
-const int FrontServoAngle = 90;
-const int SideServoAngle = FrontServoAngle + WallFollowingSide; //(0 or 180 degrees)
-const int FrontServoDelay = 90;
-const int SideServoDelay = 90;
-
-const int LeftSpeed =100; //да се подбере оптималната скорост на левия двигател
-const int RightSpeed =100; //да се подбере оптималната скорост на десния двигател
-
-float maxDistance = 130.0;
-int speedLeft = LeftSpeed;
-int speedRight = RightSpeed;
-int currentState = 0;
-
-//Servo myservo;
-
-void moveForward();
-void moveBackward();
-void turnLeft();
-void turnRight();
-void stopMoving();
-float getDistance(int servoAngle, int delayAfterServoMovement); //read the Ultasonic Sensor pointing at the given servo angle
-
-//int left();
-//int mid();
-//int right();
-//int leftEdge();
-int rightEdge();
+//====== FORWARD DECLARATIONS ======
+void moveForward();  // function prototype includes return type, name, parameters, and semicolon.  No function body!
+void moveBackward(); // function prototype includes return type, name, parameters, and semicolon.  No function body!
+void turnLeft();     // function prototype includes return type, name, parameters, and semicolon.  No function body!
+void turnRight();    // function prototype includes return type, name, parameters, and semicolon.  No function body!
+void stopMoving();   // function prototype includes return type, name, parameters, and semicolon.  No function body!
 
 //-----------------------------------------------
 
@@ -90,196 +86,193 @@ void setup()
   pinMode(LN_SENS_PIN_MIDDLE, INPUT);
   pinMode(LN_SENS_PIN_LEFT, INPUT);
   pinMode(LN_SENS_PIN_LEFTEDGE, INPUT);
-  // pinMode(LN_SENS_CALIB_PIN, OUTPUT);
+  // pinMode(LN_SENS_CALIB_PIN, OUTPUT); // We will not use sensor calibration in this program
   pinMode(LN_SENS_ANALOG_PIN, INPUT);
 
-  pinMode(ServoPin, OUTPUT);
-  pinMode(LEFT_FOR, OUTPUT);
-  pinMode(LEFT_BACK, OUTPUT);
-  pinMode(RIGHT_FOR, OUTPUT);
-  pinMode(RIGHT_BACK, OUTPUT);
-  pinMode(UltrasonicPin, OUTPUT);
-  pinMode(LedPin, OUTPUT);
-  Serial.begin(9600);
+  pinMode(MOTOR_LEFT_FWD_PIN, OUTPUT);
+  pinMode(MOTOR_LEFT_BKWD_PIN, OUTPUT);
+  pinMode(MOTOR_RIGHT_FWD_PIN, OUTPUT);
+  pinMode(MOTOR_RIGHT_BKWD_PIN, OUTPUT);
 
-  // moveForward();
-  delay(500);
+  #ifdef DEBUG          // Enable Serial port communication, Disable if "DEBUG" was not defined above
+  Serial.begin(115200); // 
+  #endif                //You will find detailed explanation in NITRObot_Line_following_5_sensors-Instructions_EN.odt
+  
+  delay(1000); //???????????????????????????????
 }
 
 //---------------------------------------------------------
 
 void loop()
 {
- //
- int leftEdge = digitalRead(LN_SENS_PIN_RIGHTEDGE);
- int left = digitalRead(LN_SENS_PIN_RIGHT);
- int mid = digitalRead(LN_SENS_PIN_MIDDLE);
- int right = digitalRead(LN_SENS_PIN_LEFT);
- int rightEdge = digitalRead(LN_SENS_PIN_LEFTEDGE);
- 
-  if ((leftEdge == 0) && (left == 0) && (mid == 1) && (right == 0) && (rightEdge == 0)) //                0 0 1 0 0
-  {
-    currentState = 1;
-    Serial.println("case1");
-  }
-  else if ((leftEdge == 0) && (left == 1) && (mid == 1) && (right == 0) && (rightEdge == 0)) //           0 1 1 0 0
-  {
-    currentState = 2;
-     Serial.println("case2");
-  }
-  else if ((leftEdge == 0) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 0)) //         0 1 0 0 0
-  {
-    currentState = 3;
-     Serial.println("case3");
-  }
-  else if ((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 0)) //       1 1 0 0 0
-  {
-    currentState = 4;
-     Serial.println("case4");
-  }
-  else if ((leftEdge == 1) && (left == 0) && (mid == 0) && (right == 0) && (rightEdge == 0)) //     1 0 0 0 0
-  {
-    currentState = 5;
-     Serial.println("case5");    
-  }
-  else if ((leftEdge == 0) && (left == 0) && (mid == 1) && (right == 1) && (rightEdge == 0)) //           0 0 1 1 0
-  {
-    currentState = 6;
-     Serial.println("case6");
-  }
-  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 0)) //         0 0 0 1 0
-  {
-    currentState = 7;
-    Serial.println("case7");
-  }
-  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 1)) //       0 0 0 1 1
-  {
-    currentState = 8;
-     Serial.println("case8");
-  }
-  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 0) && (rightEdge == 1)) //     0 0 0 0 1
-  {
-    currentState = 9;    
-    Serial.println("case9");
-  }
-  else if (((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 1) && (rightEdge == 1))|| // 1 1 0 1 1
-          ((leftEdge == 1) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 1))|| // 1 0 0 1 1
-          ((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 1))|| // 1 1 0 0 1
-          ((leftEdge == 1) && (left == 1) && (mid == 1) && (right == 0) && (rightEdge == 1))|| // 1 1 1 0 1
-          ((leftEdge == 1) && (left == 0) && (mid == 1) && (right == 1) && (rightEdge == 1)))  // 1 0 1 1 1
- {
-   currentState = 10;
- }
- else
- {
-   moveForward();
- }
+  // Read all sensors:
+  int leftEdge = digitalRead(LN_SENS_PIN_RIGHTEDGE);
+  int left = digitalRead(LN_SENS_PIN_RIGHT);
+  int mid = digitalRead(LN_SENS_PIN_MIDDLE);
+  int right = digitalRead(LN_SENS_PIN_LEFT);
+  int rightEdge = digitalRead(LN_SENS_PIN_LEFTEDGE);
 
+  if ((leftEdge == 0) && (left == 0) && (mid == 1) && (right == 0) && (rightEdge == 0))      //    0 0 1 0 0
+  {
+    robotPosition = 1;
+    Debugprintln("case1");
+  }
+  else if ((leftEdge == 0) && (left == 1) && (mid == 1) && (right == 0) && (rightEdge == 0)) //   0 1 1 0 0
+  {
+    robotPosition = 2;
+    Debugprintln("case2");
+  }
+  else if ((leftEdge == 0) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 0)) //   0 1 0 0 0
+  {
+    robotPosition = 3;
+    Debugprintln("case3");
+  }
+  else if ((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 0)) //   1 1 0 0 0
+  {
+    robotPosition = 4;
+    Debugprintln("case4");
+  }
+  else if ((leftEdge == 1) && (left == 0) && (mid == 0) && (right == 0) && (rightEdge == 0)) //   1 0 0 0 0
+  {
+    robotPosition = 5;
+    Debugprintln("case5");
+  }
+  else if ((leftEdge == 0) && (left == 0) && (mid == 1) && (right == 1) && (rightEdge == 0)) //   0 0 1 1 0
+  {
+    robotPosition = 6;
+    Debugprintln("case6");
+  }
+  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 0)) //   0 0 0 1 0
+  {
+    robotPosition = 7;
+    Debugprintln("case7");
+  }
+  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 1)) //   0 0 0 1 1
+  {
+    robotPosition = 8;
+    Debugprintln("case8");
+  }
+  else if ((leftEdge == 0) && (left == 0) && (mid == 0) && (right == 0) && (rightEdge == 1)) //   0 0 0 0 1
+  {
+    robotPosition = 9;
+    Debugprintln("case9");
+  }
+  else if (((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 1) && (rightEdge == 1)) || // 1 1 0 1 1
+           ((leftEdge == 1) && (left == 0) && (mid == 0) && (right == 1) && (rightEdge == 1)) || // 1 0 0 1 1
+           ((leftEdge == 1) && (left == 1) && (mid == 0) && (right == 0) && (rightEdge == 1)) || // 1 1 0 0 1
+           ((leftEdge == 1) && (left == 1) && (mid == 1) && (right == 0) && (rightEdge == 1)) || // 1 1 1 0 1
+           ((leftEdge == 1) && (left == 0) && (mid == 1) && (right == 1) && (rightEdge == 1)))   // 1 0 1 1 1
+  {
+    robotPosition = 10;
+  }
+  else
+  {
+    moveForward();
+  }
 
-  switch (currentState)
+  switch (robotPosition)
   {
   case 1:
-    speedLeft = LeftSpeed;
-    speedRight = RightSpeed;
+    currentLeftSpeed = DefaultLeftSpeed;
+    currentRightSpeed = DefaultRightSpeed;
     moveForward();
-    Serial.println("1");  
+    Debugprintln("1");
     break;
   case 2:
-    speedLeft = LeftSpeed * .6;
-    speedRight = 180;
+    currentLeftSpeed = DefaultLeftSpeed * .6;
+    currentRightSpeed = 180;
     moveForward();
-    Serial.println("2");
+    Debugprintln("2");
     break;
   case 3:
-    speedLeft = LeftSpeed * .4;
-    speedRight = 200;
+    currentLeftSpeed = DefaultLeftSpeed * .4;
+    currentRightSpeed = 200;
     moveForward();
-    Serial.println("3");
+    Debugprintln("3");
     break;
   case 4:
-    speedLeft = LeftSpeed * .3;
-    speedRight = 220;
-    Serial.println("4");
+    currentLeftSpeed = DefaultLeftSpeed * .3;
+    currentRightSpeed = 220;
+    Debugprintln("4");
     moveForward();
     break;
   case 5:
-    speedLeft = LeftSpeed * .2;
-    speedRight = 255;
+    currentLeftSpeed = DefaultLeftSpeed * .2;
+    currentRightSpeed = 255;
     moveForward();
-    Serial.println("5");    
+    Debugprintln("5");
     break;
   case 6:
-    speedLeft = 180;
-    speedRight = RightSpeed * .6;
+    currentLeftSpeed = 180;
+    currentRightSpeed = DefaultRightSpeed * .6;
     moveForward();
-    Serial.println("6");
+    Debugprintln("6");
     break;
   case 7:
-    speedLeft = 200;
-    speedRight = RightSpeed * .4;    
+    currentLeftSpeed = 200;
+    currentRightSpeed = DefaultRightSpeed * .4;
     moveForward();
-    Serial.println("7");
+    Debugprintln("7");
     break;
   case 8:
-    speedLeft = 220;
-    speedRight = RightSpeed * .3;
+    currentLeftSpeed = 220;
+    currentRightSpeed = DefaultRightSpeed * .3;
     moveForward();
-    Serial.println("8");
+    Debugprintln("8");
     break;
   case 9:
-    speedLeft = 255;
-    speedRight = RightSpeed * .2;
+    currentLeftSpeed = 255;
+    currentRightSpeed = DefaultRightSpeed * .2;
     moveForward();
-     Serial.println("9");
+    Debugprintln("9");
     break;
   case 10:
-    stopMoving();  
-     delay(1000);
-    Serial.println("10");
+    stopMoving();
+    Debugprintln("10");
     break;
   default:
     break;
   }
 }
 
-//==================================== FUNCTIONS =====================================================
+//============== FUNCTION DEFINITIONS ==============
 
 void moveForward() // Move forward
 {
-  analogWrite(LEFT_FOR, abs(speedLeft));
-  analogWrite(LEFT_BACK, LOW);
-  analogWrite(RIGHT_FOR, abs(speedRight));
-  analogWrite(RIGHT_BACK, LOW);
+  analogWrite(MOTOR_LEFT_FWD_PIN, abs(currentLeftSpeed));
+  analogWrite(MOTOR_LEFT_BKWD_PIN, LOW);
+  analogWrite(MOTOR_RIGHT_FWD_PIN, abs(currentRightSpeed));
+  analogWrite(MOTOR_RIGHT_BKWD_PIN, LOW);
 }
 
 void moveBackward() // Move backward
 {
-  analogWrite(LEFT_FOR, LOW);
-  analogWrite(LEFT_BACK, abs(speedLeft));
-  analogWrite(RIGHT_FOR, LOW);
-  analogWrite(RIGHT_BACK, abs(speedRight));
+  analogWrite(MOTOR_LEFT_FWD_PIN, LOW);
+  analogWrite(MOTOR_LEFT_BKWD_PIN, abs(currentLeftSpeed));
+  analogWrite(MOTOR_RIGHT_FWD_PIN, LOW);
+  analogWrite(MOTOR_RIGHT_BKWD_PIN, abs(currentRightSpeed));
 }
 
 void turnLeft() // Turn Left
 {
-  analogWrite(LEFT_FOR, LOW);
-  analogWrite(LEFT_BACK, speedLeft);
-  analogWrite(RIGHT_FOR, speedLeft);
-  analogWrite(RIGHT_BACK, LOW);
+  analogWrite(MOTOR_LEFT_FWD_PIN, LOW);
+  analogWrite(MOTOR_LEFT_BKWD_PIN, currentLeftSpeed);
+  analogWrite(MOTOR_RIGHT_FWD_PIN, currentLeftSpeed);
+  analogWrite(MOTOR_RIGHT_BKWD_PIN, LOW);
 }
 
 void turnRight() // Turn Right
 {
-  analogWrite(LEFT_FOR, speedRight);
-  analogWrite(LEFT_BACK, LOW);
-  analogWrite(RIGHT_FOR, LOW);
-  analogWrite(RIGHT_BACK, speedRight);
+  analogWrite(MOTOR_LEFT_FWD_PIN, currentRightSpeed);
+  analogWrite(MOTOR_LEFT_BKWD_PIN, LOW);
+  analogWrite(MOTOR_RIGHT_FWD_PIN, LOW);
+  analogWrite(MOTOR_RIGHT_BKWD_PIN, currentRightSpeed);
 }
 
 void stopMoving() // Stop movement
 {
-  analogWrite(LEFT_FOR, HIGH);
-  analogWrite(LEFT_BACK, HIGH);
-  analogWrite(RIGHT_FOR, HIGH);
-  analogWrite(RIGHT_BACK, HIGH);
+  analogWrite(MOTOR_LEFT_FWD_PIN, HIGH);
+  analogWrite(MOTOR_LEFT_BKWD_PIN, HIGH);
+  analogWrite(MOTOR_RIGHT_FWD_PIN, HIGH);
+  analogWrite(MOTOR_RIGHT_BKWD_PIN, HIGH);
 }
